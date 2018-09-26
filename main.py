@@ -11,39 +11,38 @@ class Node(object):
         self.right = right
         self._class = _class
 
-def split( dataset, feature, value):
-    Left = { "X": [], "Y": [] }
-    Right = { "X": [], "Y": [] }
-    a = dataset["Left"]
-    b = dataset["Right"]
-    for i in range(len(a)):
-        if (a[i][feature] > value):
-            Left["X"].append(a[i][feature])
-            Left["Y"].append(b[i])
+def split(dataset, f_index, value):
+    left = {"X":[], "Y": []}
+    right = {"X": [], "Y": []}
+    X = dataset["X"]
+    Y = dataset["Y"]
+    for i in range(len(X)):
+        if X[i][f_index] > value:
+            left["X"].append(X[i][f_index])
+            left["Y"].append(Y[i])
             
         else:
-            Right["X"].append(a[i][feature])
-            Right["Y"].append(b[i])
-            
-    return Left, Right
+            right["X"].append(X[i][f_index])
+            right["Y"].append(Y[i])
+
+    return left, right
 
 # considering groups as a list of left and right
-def get_entropy_of_split (left,right,classes):
-
+def get_entropy_of_split(left, right, classes):
     entropy = 0
-    groups = [left,right]
-    total_size = len(left["X"]) + len(right["Y"])
+    groups = [left, right]
+    total_size = len(left["X"]) + len(right["X"])
         
-    for i in groups:
-        length_group = len(i["X"])
-        normal_size = length_group / total_size
+    for group in groups:
+        length_group = len(group["X"])
+        normal_size = length_group/total_size
         group_sum = 0
-        for j in classes:
+        for _class in classes:
             count = 0
-            for k in i["Y"]:
-                if (k== j):
+            for k in group["Y"]:
+                if (k == _class):
                     count += 1
-            group_sum -= count/length_group*math.log(cpunt/length_group,2)
+            group_sum -= count/length_group*np.log(count/length_group, 2)
         entropy += normal_size*group_sum
     return entropy
 
