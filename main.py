@@ -2,7 +2,15 @@ import sys
 import time
 import random
 
-def split_data(data, ratio):
+class Node(object):
+    def __init__(self, feature, value, left, right, _class=None):
+        self.feature = feature
+        self.value = value
+        self.left = left
+        self.right = right
+        self._class = _class
+
+def extract_data(data, ratio):
     split_len = len(data)*ratio/100
     training_set = []
     X_train = []
@@ -27,9 +35,12 @@ def split_data(data, ratio):
     return X_train, Y_train, X_test, Y_test
 
 if __name__ == "__main__":
-    fp = open("banknote_auth_data.txt", 'r')
-    data = fp.readlines()
+    with open("banknote_auth_data.txt", 'r') as fp:
+        data = fp.readlines()
     m = len(data)
-    X_train, Y_train, X_test, Y_test = split_data(data, 90)
+    X_train, Y_train, X_test, Y_test = extract_data(data, 90)
     n = len(X_train[0])
-    fp.close()
+
+    
+
+    
