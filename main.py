@@ -11,6 +11,42 @@ class Node(object):
         self.right = right
         self._class = _class
 
+def split( dataset, feature, value):
+    Left = { "X": [], "Y": [] }
+    Right = { "X": [], "Y": [] }
+    a = dataset["Left"]
+    b = dataset["Right"]
+    for i in range(len(a)):
+        if (a[i][feature] > value):
+            Left["X"].append(a[i][feature])
+            Left["Y"].append(b[i])
+            
+        else:
+            Right["X"].append(a[i][feature])
+            Right["Y"].append(b[i])
+            
+    return Left, Right
+
+# considering groups as a list of left and right
+def get_entropy_of_split (left,right,classes):
+
+    entropy = 0
+    groups = [left,right]
+    total_size = len(left["X"]) + len(right["Y"])
+        
+    for i in groups:
+        length_group = len(i["X"])
+        normal_size = length_group / total_size
+        group_sum = 0
+        for j in classes:
+            count = 0
+            for k in i["Y"]:
+                if (k== j):
+                    count += 1
+            group_sum -= count/length_group*math.log(cpunt/length_group,2)
+        entropy += normal_size*group_sum
+    return entropy
+
 def cal_entropy(a, b, c, d):
     #TO-DO: calculate the entropy
     return None
