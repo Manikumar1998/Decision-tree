@@ -5,7 +5,7 @@ import numpy as np
 from collections import Counter
 
 class Node(object):
-    def __init__(self, feature, value, left, right, _class=None):
+    def __init__(self, feature, value, left=None, right=None, _class=None):
         self.feature = feature
         self.value = value
         self.left = left
@@ -19,7 +19,7 @@ def split(dataset, f_index, value):
     Y = dataset["Y"]
     
     for x,y in zip(X,Y):
-        if x[f_index] > value:
+        if x[f_index] <= value:
             left["X"].append(x)
             left["Y"].append(y)
             
@@ -67,7 +67,31 @@ def cal_gain(dataset, classes, f_index, value):
     return gain, groups
 
 
+def majority_voting(dataset):
+    Y = dataset['Y']
+    Y_count = Counter(Y)
+    _class = max(Y_count)
+    return _class
+    
+
 def construct_decision_tree(dataset, limits, classes, features):
+    #Stop when all belong to same class
+    if len(classes) == 1:
+        return Node(None,
+                    None,
+                    _class=classes[0])
+
+    #Stop when no features are left
+    if not features:
+        _class = majority_voting(dataset)
+        return Node(None,
+                    None,
+                    _class=_class)
+
+    #Stop when no samples left
+    if not dataset['X']:
+        return None
+        
     X = dataset['X']
     Y = dataset['Y']
 
@@ -90,23 +114,36 @@ def construct_decision_tree(dataset, limits, classes, features):
     
     selected = max(_gains, key=lambda i:i['max_gain'])
 
-    # node = Node(selected['f_index'],
-    #             selected['value'],
-    #             _class=_class)
+    node = Node(selected['f_index'],
+                selected['value'],
+                _class=None)
 
-    # left_data = selected['groups']['left']
-    # left_n = 
-    # right_data = selected['groups']['right']
-    # right_n =
+    new_features = []
+    for f_index in features:
+        if f_index != selected['f_index']:
+            new_features.append(f_index)
 
-    # left_limits = get(left_data, left_n)
-    # right_limits = get(right_data, right_n)
-    # node.left =  construct_decision_tree(selected['groups']['left'], )
-    # node.right = construct_decision_tree(selected['groups']['right'], )
+    left_data = selected['groups']['left']
+    left_limits = get_limits(left_data, new_features)
+    left_classes = get_classes(left_data)
+    
+    right_data = selected['groups']['right']
+    right_limits = get_limits(right_data, new_features)
+    right_classes = get_classes(right_data)
+    
+    node.left =  construct_decision_tree(left_data,
+                                         left_limits,
+                                         left_classes,
+                                         new_features)
 
-    # return node
+    node.right = construct_decision_tree(right_data,
+                                         right_limits,
+                                         right_classes,
+                                         new_features)
+    return node
 
-def get_limits(X, features):
+def get_limits(dataset, features):
+    X = dataset['X']
     limits = {}
     for index in features:
         limits[index] = {'min':None, 'max':None}
@@ -123,7 +160,11 @@ def get_limits(X, features):
             elif x[index] > limits[index]['max']:
                 limits[index]['max'] = x[index]
     return limits
-    
+
+def get_classes(dataset):
+    Y = dataset['Y']
+    return list(set(Y))
+
 def extract_data(data, ratio):
     split_len = len(data)*ratio/100
     training_set = []
@@ -146,14 +187,13 @@ def extract_data(data, ratio):
         Y_test.append(int(vector.pop(-1)))
         X_test.append(map(float, vector))
 
-    classes = list(set(Y_train+Y_test))
-    return X_train, Y_train, X_test, Y_test, classes
+    return X_train, Y_train, X_test, Y_test
 
 if __name__ == "__main__":
     with open("test_data.txt", 'r') as fp:
         data = fp.readlines()
     m = len(data)
-    X_train, Y_train, X_test, Y_test, classes = extract_data(data, 90)
+    X_train, Y_train, X_test, Y_test = extract_data(data, 90)
 
     #REMOVE for actual data
     X_train.extend(X_test)
@@ -161,9 +201,8 @@ if __name__ == "__main__":
     
     features = range(len(X_train[0]))
     dataset = {'X':X_train, 'Y':Y_train}
-
-    #Should we get min of only X_train or X_train+X_test?
-    limits = get_limits(X_train, features)
-    root = construct_decision_tree(dataset, limits, classes, features)
-
+    classes = get_classes({'X':X_train+X_test, 'Y':Y_train+Y_test})
     
+    #Should we get min of only X_train or X_train+X_test?
+    limits = get_limits(dataset, features)
+    root = construct_decision_tree(dataset, limits, classes, features)
