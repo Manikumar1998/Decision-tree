@@ -165,6 +165,21 @@ def get_classes(dataset):
     Y = dataset['Y']
     return list(set(Y))
 
+def classify(root, X_data):
+    classified = []
+    for x in X_data:
+        node = root
+        while(node != None):
+            if node._class != None:
+                classified.append(node._class)
+                break
+            else:
+                if x[node.feature] <= node.value:
+                    node = node.left
+                else:
+                    node = node.right
+    return classified
+
 def extract_data(data, ratio):
     split_len = len(data)*ratio/100
     training_set = []
@@ -178,19 +193,24 @@ def extract_data(data, ratio):
         training_set.append(data.pop(index))
 
     for vector in training_set:
-        vector = map(str.strip, vector.split(','))
-        Y_train.append(int(vector.pop(-1)))
-        X_train.append(map(float, vector))
+        vector = map(str.strip, vector.split())
+        try:
+            Y_train.append(int(vector.pop(-1)))
+            X_train.append(map(float, vector))
+        except:
+            print vector
 
     for vector in data:
-        vector = map(str.strip, vector.split(','))
+        vector = map(str.strip, vector.split())
         Y_test.append(int(vector.pop(-1)))
         X_test.append(map(float, vector))
 
     return X_train, Y_train, X_test, Y_test
 
 if __name__ == "__main__":
-    with open("test_data.txt", 'r') as fp:
+    with open("sensorless_drive_data.txt", 'r') as fp:
+    #with open("banknote_auth_data.txt", 'r') as fp:
+    #with open("test_data.txt", 'r') as fp:
         data = fp.readlines()
     m = len(data)
     X_train, Y_train, X_test, Y_test = extract_data(data, 90)
@@ -206,3 +226,20 @@ if __name__ == "__main__":
     #Should we get min of only X_train or X_train+X_test?
     limits = get_limits(dataset, features)
     root = construct_decision_tree(dataset, limits, classes, features)
+    # print root.feature, root.value, root._class
+    # print root.right.feature, root.right.value, root.right._class
+    # print root.left.feature, root.left.value, root.left._class
+    # print root.left.left.feature, root.left.left.value, root.left.left._class
+    # print root.left.right.feature, root.left.right.value, root.left.right._class
+    # print classify(root, [[8, 290, 38],
+    #                       [6, 200, 45],
+    #                       [8, 160, 41],
+    #                       [4, 20, 1],
+    #                       [6, 78, 8],
+    #                       [0, 250, 36]])
+    Y_ = classify(root, X_test)
+    count = 0
+    for i, j in zip(Y_, Y_test):
+        if i == j:
+            count += 1
+    print count/float(len(Y_test))
