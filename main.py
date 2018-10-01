@@ -4,6 +4,7 @@ import random
 import numpy as np
 from collections import Counter
 from timeit import default_timer as timer
+from threading import Thread
 
 class Node(object):
     def __init__(self, feature, value, left=None, right=None, _class=None):
@@ -14,7 +15,7 @@ class Node(object):
         self._class = _class
 
     def __repr__(self):
-        node_repr = "Node(f_index:{}, value:{}, class:{})"
+        node_repr = "Node(f_index:{} - value:{} - class:{})"
         reprs = node_repr.format(str(self.feature),
                          str(self.value),
                          str(self._class))
@@ -173,21 +174,40 @@ def get_classes(dataset):
     Y = dataset['Y']
     return list(set(Y))
 
-# def draw_graph(root):
-#     counter = 0
-#     nodes_fp = open('nodes.csv', 'a')
-#     edges_fp = open('edges.csv', 'a')
+nodes = {}
+edges = []
 
-#     node = root
-#     while(not node):
-#         nodes_fp.write(counter+','+str(node))
-#         counter += 1
-#         node = node
+def get_nodes(node, i):
+    if not node:
+        return
+    nodes[i] = str(node)
+    get_nodes(node.left, 2*i+1)
+    get_nodes(node.right, 2*i+2)
+
+def get_edges(node, i):
+    global nodes, edges
+    for key, value in nodes.items():
+        if nodes.has_key(2*key+1):
+            edges.append([key, 2*key+1])
+        if nodes.has_key(2*key+2):
+            edges.append([key, 2*key+2])
+
+def get_nodes_edges(node, i):
+    get_nodes(node, i)
+    get_edges(node, i)
+    nodes_fp = open('nodes.csv', 'a')
+    edges_fp = open('edges.csv', 'a')
+
+    for key, value in nodes.items():
+        nodes_fp.write(str(key)+','+value+'\n')
+
+    for edge in edges:
+        edges_fp.write(str(edge[0])+','+str(edge[1])+',Undirected'+',1\n')
+
+    nodes_fp.close()
+    edges_fp.close()
         
-
-#     nodes_fp.close()
-#     edges_fp.close()
-    
+        
 def classify(root, X_data):
     classified = []
     for x in X_data:
@@ -230,43 +250,100 @@ def extract_data(data, ratio):
 
     return X_train, Y_train, X_test, Y_test
 
+
+class ThreadReturn(Thread):
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs={}, Verbose=None):
+        Thread.__init__(self, group, target, name, args, kwargs, Verbose)
+        self._return = None
+    def run(self):
+        if self._Thread__target is not None:
+            self._return = self._Thread__target(*self._Thread__args,
+                                                **self._Thread__kwargs)
+    def join(self):
+        Thread.join(self)
+        return self._return
+
+
+def bagging(dataset, K, overlap=0):
+    X_train = dataset['X']
+    Y_train = dataset['Y']
+    
+    split_len = len(X_train)/K
+    bagging_data_X = []
+    bagging_data_Y = []
+
+    for i in range(K):
+        row_data_X = []
+        row_data_Y = []
+        while(len(row_data_X) < split_len):
+            index = random.randint(0, len(X_train)-1)
+            row_data_X.append(X_train.pop(index))
+            row_data_Y.append(Y_train.pop(index))
+        bagging_data_X.append(row_data_X)
+        bagging_data_Y.append(row_data_Y)
+
+    # overlap_length = int(split_len*overlap/100.0)
+    # overlap_dict = {}
+    # all_values = range(split_len)
+   
+    # for i in xrange(K):
+    #     overlap_dict[i] = random.sample(all_values, overlap_length)
+
+    # for i in xrange(K):
+    #     other_ks = range(K)
+    #     other_ks.remove(i)
+
+    #     for j in xrange(overlap_length):
+    #         random_set = random.sample(other_ks, 1)[0]
+    #         len_set = len(overlap_dict[random_set])
+    #         rand_index = random.randint(0, len_set-1)
+    #         selected_index = overlap_dict[random_set].pop(rand_index)
+            
+    #         bagging_data_X.append(bagging_data_X[random_set][selected_index])
+    #         bagging_data_Y.append(bagging_data_Y[random_set][selected_index])
+
+    return bagging_data_X, bagging_data_Y
+
+def accuracy(pred, actual):
+    acc = 0.0
+    for y_, y in zip(pred, actual):
+        if y_ == y:
+           acc += 1
+    return acc/len(pred)
+
 if __name__ == "__main__":
     start = timer()
-    #with open("sensorless_drive_data.txt", 'r') as fp:
-    #with open("banknote_auth_data.txt", 'r') as fp:
-    with open("test_data.txt", 'r') as fp:
+    with open("banknote_auth_data.txt", 'r') as fp:
         data = fp.readlines()
-    m = len(data)
-    X_train, Y_train, X_test, Y_test = extract_data(data, 90)
 
-    #REMOVE for actual data
-    X_train.extend(X_test)
-    Y_train.extend(Y_test)
+    X_train, Y_train, X_test, Y_test = extract_data(data, 90)
     
     features = range(len(X_train[0]))
     dataset = {'X':X_train, 'Y':Y_train}
-    classes = get_classes({'X':X_train+X_test, 'Y':Y_train+Y_test})
-    
-    #Should we get min of only X_train or X_train+X_test?
+    classes = get_classes(dataset)
     limits = get_limits(dataset, features)
+
     root = construct_decision_tree(dataset, limits, classes, features)
-    # print root.feature, root.value, root._class
-    # print root.right.feature, root.right.value, root.right._class
-    # print root.left.feature, root.left.value, root.left._class
-    # print root.left.left.feature, root.left.left.value, root.left.left._class
-    # print root.left.right.feature, root.left.right.value, root.left.right._class
-    # print classify(root, [[8, 290, 38],
-    #                       [6, 200, 45],
-    #                       [8, 160, 41],
-    #                       [4, 20, 1],
-    #                       [6, 78, 8],
-    #                       [0, 250, 36]])
     Y_ = classify(root, X_test)
-    count = 0
-    for i, j in zip(Y_, Y_test):
-        if i == j:
-            count += 1
-    print count/float(len(Y_test))
-    duration = timer() - start
-    print duration
+    print 'Without Bagging: {}'.format(accuracy(Y_, Y_test))
+#---------------------------------------------------------------------------------
+    K = 2
+    overlap = 50
+    X, Y = bagging(dataset, K, overlap)
+    
+    threads = [None] * K
+    roots = [None] * K
+    
+    for i in xrange(K):
+        dataset = {'X':X[i], 'Y':Y[i]}
+        threads[i] = ThreadReturn(target=construct_decision_tree,
+                                  args=(dataset, limits, classes, features))
+        threads[i].start()
+        roots[i] = threads[i].join()
+
+    for root in roots:
+        Y_ = classify(root, X_test)
+        print 'Bagging: {}'.format(accuracy(Y_, Y_test))
+    print 'Time: {}'.format(timer() - start)
     
