@@ -3,6 +3,7 @@ import time
 import random
 import numpy as np
 from collections import Counter
+from timeit import default_timer as timer
 
 class Node(object):
     def __init__(self, feature, value, left=None, right=None, _class=None):
@@ -11,6 +12,13 @@ class Node(object):
         self.left = left
         self.right = right
         self._class = _class
+
+    def __repr__(self):
+        node_repr = "Node(f_index:{}, value:{}, class:{})"
+        reprs = node_repr.format(str(self.feature),
+                         str(self.value),
+                         str(self._class))
+        return reprs
 
 def split(dataset, f_index, value):
     left = {"X":[], "Y": []}
@@ -165,6 +173,21 @@ def get_classes(dataset):
     Y = dataset['Y']
     return list(set(Y))
 
+# def draw_graph(root):
+#     counter = 0
+#     nodes_fp = open('nodes.csv', 'a')
+#     edges_fp = open('edges.csv', 'a')
+
+#     node = root
+#     while(not node):
+#         nodes_fp.write(counter+','+str(node))
+#         counter += 1
+#         node = node
+        
+
+#     nodes_fp.close()
+#     edges_fp.close()
+    
 def classify(root, X_data):
     classified = []
     for x in X_data:
@@ -193,7 +216,7 @@ def extract_data(data, ratio):
         training_set.append(data.pop(index))
 
     for vector in training_set:
-        vector = map(str.strip, vector.split())
+        vector = map(str.strip, vector.split(','))
         try:
             Y_train.append(int(vector.pop(-1)))
             X_train.append(map(float, vector))
@@ -201,16 +224,17 @@ def extract_data(data, ratio):
             print vector
 
     for vector in data:
-        vector = map(str.strip, vector.split())
+        vector = map(str.strip, vector.split(','))
         Y_test.append(int(vector.pop(-1)))
         X_test.append(map(float, vector))
 
     return X_train, Y_train, X_test, Y_test
 
 if __name__ == "__main__":
-    with open("sensorless_drive_data.txt", 'r') as fp:
+    start = timer()
+    #with open("sensorless_drive_data.txt", 'r') as fp:
     #with open("banknote_auth_data.txt", 'r') as fp:
-    #with open("test_data.txt", 'r') as fp:
+    with open("test_data.txt", 'r') as fp:
         data = fp.readlines()
     m = len(data)
     X_train, Y_train, X_test, Y_test = extract_data(data, 90)
@@ -243,3 +267,6 @@ if __name__ == "__main__":
         if i == j:
             count += 1
     print count/float(len(Y_test))
+    duration = timer() - start
+    print duration
+    
