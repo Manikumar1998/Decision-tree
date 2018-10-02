@@ -4,7 +4,7 @@ import random
 import numpy as np
 from collections import Counter
 from timeit import default_timer as timer
-from threading import Thread
+import multiprocessing
 
 class Node(object):
     def __init__(self, feature, value, left=None, right=None, _class=None):
@@ -81,7 +81,10 @@ def majority_voting(dataset):
     Y_count = Counter(Y)
     _class = max(Y_count)
     return _class
-    
+
+def construct(dataset, limits, classes, features, roots, i):
+    root = construct_decision_tree(dataset, limits, classes, features)
+    roots[i] = root
 
 def construct_decision_tree(dataset, limits, classes, features):
     #Stop when all belong to same class
@@ -250,22 +253,7 @@ def extract_data(data, ratio):
 
     return X_train, Y_train, X_test, Y_test
 
-
-class ThreadReturn(Thread):
-    def __init__(self, group=None, target=None, name=None,
-                 args=(), kwargs={}, Verbose=None):
-        Thread.__init__(self, group, target, name, args, kwargs, Verbose)
-        self._return = None
-    def run(self):
-        if self._Thread__target is not None:
-            self._return = self._Thread__target(*self._Thread__args,
-                                                **self._Thread__kwargs)
-    def join(self):
-        Thread.join(self)
-        return self._return
-
-
-def bagging(dataset, K, overlap=0):
+def bagging_split(dataset, K, overlap=0):
     X_train = dataset['X']
     Y_train = dataset['Y']
     
@@ -305,6 +293,26 @@ def bagging(dataset, K, overlap=0):
 
     return bagging_data_X, bagging_data_Y
 
+def bagging(dataset, K):
+    X = dataset['X']
+    Y = dataset['Y']
+    
+    manager = multiprocessing.Manager()
+    roots_dict = manager.dict()
+    jobs = []
+    
+    for i in xrange(K):
+        dataset = {'X':X[i], 'Y':Y[i]}
+        p = multiprocessing.Process(target=construct, args=(dataset,limits,classes,
+                                                            features,roots_dict,i))
+        jobs.append(p)
+        p.start()
+
+    for proc in jobs:
+        proc.join()
+
+    return roots_dict.values()
+
 def accuracy(pred, actual):
     acc = 0.0
     for y_, y in zip(pred, actual):
@@ -330,17 +338,10 @@ if __name__ == "__main__":
 #---------------------------------------------------------------------------------
     K = 2
     overlap = 50
-    X, Y = bagging(dataset, K, overlap)
-    
-    threads = [None] * K
-    roots = [None] * K
-    
-    for i in xrange(K):
-        dataset = {'X':X[i], 'Y':Y[i]}
-        threads[i] = ThreadReturn(target=construct_decision_tree,
-                                  args=(dataset, limits, classes, features))
-        threads[i].start()
-        roots[i] = threads[i].join()
+    X, Y = bagging_split(dataset, K, overlap)
+
+    dataset = {'X':X, 'Y':Y}
+    roots = bagging(dataset, K)
 
     for root in roots:
         Y_ = classify(root, X_test)
