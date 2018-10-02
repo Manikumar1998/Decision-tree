@@ -63,6 +63,7 @@ def get_entropy_of_split(dataset, f_index, value, classes):
     return entropy, groups_dict
 
 def cal_gain(dataset, classes, f_index, value):
+
     classes_count = Counter(dataset['Y'])
     total_count = len(dataset['Y'])
     initial_entropy = 0
@@ -125,7 +126,6 @@ def construct_decision_tree(dataset, limits, classes, features):
                        'groups':max_gain_pair['groups']})
     
     selected = max(_gains, key=lambda i:i['max_gain'])
-
     node = Node(selected['f_index'],
                 selected['value'],
                 _class=None)
@@ -271,25 +271,25 @@ def bagging_split(dataset, K, overlap=0):
         bagging_data_X.append(row_data_X)
         bagging_data_Y.append(row_data_Y)
 
-    # overlap_length = int(split_len*overlap/100.0)
-    # overlap_dict = {}
-    # all_values = range(split_len)
-   
-    # for i in xrange(K):
-    #     overlap_dict[i] = random.sample(all_values, overlap_length)
+    overlap_length = int(split_len*overlap/100.0)
+    overlap_data_X = [[] for i in xrange(K)]
+    overlap_data_Y = [[] for i in xrange(K)]
+    
+    for i in xrange(K):
+        all_sets = range(K)
+        all_sets.remove(i)
 
-    # for i in xrange(K):
-    #     other_ks = range(K)
-    #     other_ks.remove(i)
+        for _ in xrange(overlap_length):
+            set_index = random.sample(all_sets, 1)[0]
+            len_set = len(bagging_data_X[set_index])
+            data_index = random.randint(0, len_set-1)
 
-    #     for j in xrange(overlap_length):
-    #         random_set = random.sample(other_ks, 1)[0]
-    #         len_set = len(overlap_dict[random_set])
-    #         rand_index = random.randint(0, len_set-1)
-    #         selected_index = overlap_dict[random_set].pop(rand_index)
-            
-    #         bagging_data_X.append(bagging_data_X[random_set][selected_index])
-    #         bagging_data_Y.append(bagging_data_Y[random_set][selected_index])
+            overlap_data_X[i].append(bagging_data_X[set_index][data_index])
+            overlap_data_Y[i].append(bagging_data_Y[set_index][data_index])
+
+    for i in xrange(K):
+        bagging_data_X[i].extend(overlap_data_X[i])
+        bagging_data_Y[i].extend(overlap_data_Y[i])
 
     return bagging_data_X, bagging_data_Y
 
@@ -320,31 +320,46 @@ def accuracy(pred, actual):
            acc += 1
     return acc/len(pred)
 
+def bagg_classify(roots, test_data):
+    bagg_pred = []
+    for root in roots:
+        bagg_pred.append(classify(root, test_data))
+    bagg_pred = np.ndarray.tolist(np.transpose(np.array(bagg_pred)))
+
+    for i in bagg_pred:
+        predictions.append(max(Counter(i)))
+
+    return predictions
+    
+    
 if __name__ == "__main__":
     start = timer()
     with open("banknote_auth_data.txt", 'r') as fp:
         data = fp.readlines()
 
     X_train, Y_train, X_test, Y_test = extract_data(data, 90)
-    
+
     features = range(len(X_train[0]))
     dataset = {'X':X_train, 'Y':Y_train}
     classes = get_classes(dataset)
     limits = get_limits(dataset, features)
+    
+    # root = construct_decision_tree(dataset, limits, classes, features)
+    # Y_ = classify(root, X_test)
+    # print 'Without Bagging: {}'.format(accuracy(Y_, Y_test))
+    #---------------------------------------------------------------------------------
 
-    root = construct_decision_tree(dataset, limits, classes, features)
-    Y_ = classify(root, X_test)
-    print 'Without Bagging: {}'.format(accuracy(Y_, Y_test))
-#---------------------------------------------------------------------------------
-    K = 2
-    overlap = 50
+    K = 7
+    overlap = 10
     X, Y = bagging_split(dataset, K, overlap)
 
-    dataset = {'X':X, 'Y':Y}
-    roots = bagging(dataset, K)
-
+    bagg_dataset = {'X':X, 'Y':Y}
+    roots = bagging(bagg_dataset, K)
+    
     for root in roots:
         Y_ = classify(root, X_test)
         print 'Bagging: {}'.format(accuracy(Y_, Y_test))
     print 'Time: {}'.format(timer() - start)
+    
+    #--------------------------------------------------------------------------------
     
