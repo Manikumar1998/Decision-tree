@@ -83,12 +83,28 @@ def majority_voting(dataset):
     _class = max(Y_count)
     return _class
 
-def construct(dataset, limits, classes, features, roots, i):
-    root = construct_decision_tree(dataset, limits, classes, features)
-    roots[i] = root
+def construct(dataset, limits, classes, features, roots, i, randomtree=False):
+    if not randomtree:
+        root = construct_decision_tree(dataset, limits, classes, features, 0)
+        roots[i] = root
+    else:
+        root = construct_decision_tree(dataset, limits, classes, features, 0, randomtree=True)
+        roots[i] = root
 
-def construct_decision_tree(dataset, limits, classes, features):
-    #Stop when all belong to same class
+def construct_decision_tree(dataset, limits, classes, features, depth, randomtree=False):
+    #Stop when depth is reached
+    if depth_limit:
+        if depth == depth_limit:
+            _class = majority_voting(dataset)
+            return Node(None,
+                        None,
+                        _class=_class)
+        
+    #Stop when no samples left
+    if not dataset['X']:
+        return None
+        
+    #Stop when all belong to same class                
     if len(classes) == 1:
         return Node(None,
                     None,
@@ -101,10 +117,6 @@ def construct_decision_tree(dataset, limits, classes, features):
                     None,
                     _class=_class)
 
-    #Stop when no samples left
-    if not dataset['X']:
-        return None
-        
     X = dataset['X']
     Y = dataset['Y']
 
@@ -113,7 +125,7 @@ def construct_decision_tree(dataset, limits, classes, features):
         information_gain = []
         _min = limits[f_index]['min']
         _max = limits[f_index]['max']
-        for value in np.linspace(_min, _max, 100):
+        for value in np.linspace(_min, _max, 5):
             gain, groups = cal_gain(dataset, classes, f_index, value)
             information_gain.append({'value':value,
                                      'gain': gain,
@@ -124,11 +136,18 @@ def construct_decision_tree(dataset, limits, classes, features):
                        'max_gain':max_gain_pair['gain'],
                        'value':max_gain_pair['value'],
                        'groups':max_gain_pair['groups']})
-    
-    selected = max(_gains, key=lambda i:i['max_gain'])
+
+    if not randomtree:
+        selected = max(_gains, key=lambda i:i['max_gain'])
+
+    else:
+        sorted(_gains, key=lambda i:i['max_gain'])
+        top_length = int(np.sqrt(len(features)))
+        selected = _gains[random.randint(0, top_length)]
+        
     node = Node(selected['f_index'],
                 selected['value'],
-                _class=None)
+                _class=None)        
 
     new_features = []
     for f_index in features:
@@ -146,12 +165,14 @@ def construct_decision_tree(dataset, limits, classes, features):
     node.left =  construct_decision_tree(left_data,
                                          left_limits,
                                          left_classes,
-                                         new_features)
+                                         new_features,
+                                         depth+1)
 
     node.right = construct_decision_tree(right_data,
                                          right_limits,
                                          right_classes,
-                                         new_features)
+                                         new_features,
+                                         depth+1)
     return node
 
 def get_limits(dataset, features):
@@ -195,11 +216,12 @@ def get_edges(node, i):
         if nodes.has_key(2*key+2):
             edges.append([key, 2*key+2])
 
-def get_nodes_edges(node, i):
+def get_nodes_edges(node, filename):
+    i = 0
     get_nodes(node, i)
     get_edges(node, i)
-    nodes_fp = open('nodes.csv', 'a')
-    edges_fp = open('edges.csv', 'a')
+    nodes_fp = open('nodes-{}.csv'.format(filename), 'a')
+    edges_fp = open('edges-{}.csv'.format(filename), 'a')
 
     for key, value in nodes.items():
         nodes_fp.write(str(key)+','+value+'\n')
@@ -226,28 +248,35 @@ def classify(root, X_data):
                     node = node.right
     return classified
 
-def extract_data(data, ratio):
+def extract_data(data, ratio, sepr):
     split_len = len(data)*ratio/100
     training_set = []
     X_train = []
     Y_train = []
     X_test = []
     Y_test = []
-    
+        
     while(len(training_set) < split_len):
         index = random.randint(0, len(data)-1)
         training_set.append(data.pop(index))
 
     for vector in training_set:
-        vector = map(str.strip, vector.split(','))
+        if sepr == 2:
+            vector = map(str.strip, vector.split(','))
+        else:
+            vector = map(str.strip, vector.split())
         try:
             Y_train.append(int(vector.pop(-1)))
             X_train.append(map(float, vector))
         except:
-            print vector
+            print "Error occured while reading data(Ensure proper format).. "
+            return
 
     for vector in data:
-        vector = map(str.strip, vector.split(','))
+        if sepr == 2:
+            vector = map(str.strip, vector.split(','))
+        else:
+            vector = map(str.strip, vector.split())
         Y_test.append(int(vector.pop(-1)))
         X_test.append(map(float, vector))
 
@@ -293,7 +322,7 @@ def bagging_split(dataset, K, overlap=0):
 
     return bagging_data_X, bagging_data_Y
 
-def bagging(dataset, K):
+def bagging(dataset, K, randomTree=False):
     X = dataset['X']
     Y = dataset['Y']
     
@@ -304,7 +333,8 @@ def bagging(dataset, K):
     for i in xrange(K):
         dataset = {'X':X[i], 'Y':Y[i]}
         p = multiprocessing.Process(target=construct, args=(dataset,limits,classes,
-                                                            features,roots_dict,i))
+                                                            features,roots_dict,i,
+                                                            randomTree))
         jobs.append(p)
         p.start()
 
@@ -322,44 +352,81 @@ def accuracy(pred, actual):
 
 def bagg_classify(roots, test_data):
     bagg_pred = []
+    predictions = []
     for root in roots:
         bagg_pred.append(classify(root, test_data))
+
+    _pred = [[] for i in range(len(roots))]
+    for i in range(len(bagg_pred)):
+        for j in range(len(bagg_pred[0])):
+            _pred[i].append(bagg_pred[i][j])
     bagg_pred = np.ndarray.tolist(np.transpose(np.array(bagg_pred)))
 
     for i in bagg_pred:
         predictions.append(max(Counter(i)))
-
     return predictions
+
     
-    
+depth_limit = 0
+
 if __name__ == "__main__":
     start = timer()
-    with open("banknote_auth_data.txt", 'r') as fp:
-        data = fp.readlines()
+    global depth_limit
+    filename = raw_input("Enter the file name: ")
+    seperated = int(raw_input("Type of file\n1.Space seperated\n2.Comma seperated\noption: "))
+    split_ratio = int(raw_input("Enter the train/test split ratio: "))
+    d = int(raw_input("Enter the depth(0 for no limit): "))
+    if d != 0:
+        depth_limit = d
+    
+    option = int(raw_input("Choose from below\n1.Basic Decision\n2.Bagging\n3.Random Forest\noption: "))
 
-    X_train, Y_train, X_test, Y_test = extract_data(data, 90)
+    with open(filename, 'r') as fp:
+        data = fp.readlines()
+    X_train, Y_train, X_test, Y_test = extract_data(data, 90, seperated)
 
     features = range(len(X_train[0]))
     dataset = {'X':X_train, 'Y':Y_train}
     classes = get_classes(dataset)
     limits = get_limits(dataset, features)
     
-    # root = construct_decision_tree(dataset, limits, classes, features)
-    # Y_ = classify(root, X_test)
-    # print 'Without Bagging: {}'.format(accuracy(Y_, Y_test))
-    #---------------------------------------------------------------------------------
-
-    K = 7
-    overlap = 10
-    X, Y = bagging_split(dataset, K, overlap)
-
-    bagg_dataset = {'X':X, 'Y':Y}
-    roots = bagging(bagg_dataset, K)
-    
-    for root in roots:
+    if option == 1:
+        print "Training a basic Decision tree... "
+        root = construct_decision_tree(dataset, limits, classes, features, 0)
         Y_ = classify(root, X_test)
-        print 'Bagging: {}'.format(accuracy(Y_, Y_test))
-    print 'Time: {}'.format(timer() - start)
+        accu = accuracy(Y_, Y_test)
+        print "Accuracy: {}".format(accu)
+
+    elif option == 2:
+        K = int(raw_input("Enter K: "))
+        overlap = int(raw_input("Enter the percent of overlap: "))
+        print "Training {} trees with {} overlap...".format(K, overlap)
+        
+        X, Y = bagging_split(dataset, K, overlap)
+        bagg_dataset = {'X':X, 'Y':Y}
+        roots = bagging(bagg_dataset, K)
+        Y_ = bagg_classify(roots, X_test)
+        accu = accuracy(Y_, Y_test)
+        print 'Accuracy: {}'.format(accu)
+
+    elif option == 3:
+        K = int(raw_input("Enter K: "))
+        overlap = int(raw_input("Enter the percent of overlap: "))
+        print "Training {} random forests with {} overlap...".format(K, overlap)
     
-    #--------------------------------------------------------------------------------
-    
+        X, Y = bagging_split(dataset, K, overlap)
+        bagg_dataset = {'X':X, 'Y':Y}
+        roots = bagging(bagg_dataset, K, randomTree=True )
+        Y_ = bagg_classify(roots, X_test)
+        accu = accuracy(Y_, Y_test)
+        print 'Accuracy: {}'.format(accu)
+        
+    print '\nTime taken: {}\n'.format(timer() - start)
+    option2 = int(raw_input("Do you want to test classify the data?\n1.Yes\n2.No\noption: "))
+    if option2 == 1:
+        _input = map(float, raw_input("Enter the features (space seperated): ").split())
+        print _input
+        if option == 1:
+            print "Classification: {}".format(classify(root, [_input])[0])
+        else:
+            print "Classification: {}".format(bagg_classify(roots, [_input])[0])
